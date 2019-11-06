@@ -1,5 +1,5 @@
 /**
- *  GE/Jasco Z-Wave Plus Dimmer Switch XP
+ *  GE/Jasco Z-Wave Plus Dimmer Switch
  *
  *  Copyright 2017 Chris Nussbaum
  *
@@ -627,7 +627,7 @@ def levelDown() {
 }
 
 def showVersion() { 
-    sendEvent (name: "about", value:"DTH Version 1.0.11 (11/5/19)") }
+    sendEvent (name: "about", value:"DTH Version .18 (11/6/19)") }
 
 // Private Methods
 
