@@ -1,5 +1,5 @@
 /**
- *  GE/Jasco Z-Wave Plus Dimmer Switch
+ *  GE/Jasco Z-Wave Plus Dimmer Switch XP
  *
  *  Copyright 2017 Chris Nussbaum
  *
@@ -17,6 +17,7 @@
  *
  *	Changelog:
  *
+ *  0.18 (11/06/2019) - Add parameter 32 'defaultLevel' ("Default Brightness")
  *  0.17 (11/05/2018) - Add additional versions of the GE Z-Wave Plus Wall Dimmer
  *  0.16 (08/03/2017) - Fix bug with status not getting updated when turned on/off from SmartThings
  *  0.15 (04/28/2017) - Fix bug with setting level to 100%
@@ -35,7 +36,7 @@
  *
  */
 metadata {
-	definition (name: "GE/Jasco Z-Wave Plus Dimmer Switch", namespace: "nuttytree", author: "Chris Nussbaum") {
+	definition (name: "GE/Jasco Z-Wave Plus Dimmer Switch XP", namespace: "nuttytree", author: "Chris Nussbaum") {
 		capability "Actuator"
 		capability "Button"
 		capability "Configuration"
@@ -54,6 +55,7 @@ metadata {
         attribute "manualDelay", "number"
         attribute "allSteps", "number"
         attribute "allDelay", "number"
+ 	    attribute "defaultLevel", "number"
         
         command "doubleUp"
         command "doubleDown"
@@ -67,12 +69,13 @@ metadata {
         command "setManualDelay"
         command "setAllSteps"
         command "setAllDelay"
+		command "setDefaultLevel"
         
         // These include version because there are older firmwares that don't support double-tap or the extra association groups
         fingerprint mfr:"0063", prod:"4944", model:"3038", ver: "5.26", deviceJoinName: "GE Z-Wave Plus Wall Dimmer"
-	fingerprint mfr:"0063", prod:"4944", model:"3038", ver: "5.27", deviceJoinName: "GE Z-Wave Plus Wall Dimmer"
-	fingerprint mfr:"0063", prod:"4944", model:"3038", ver: "5.28", deviceJoinName: "GE Z-Wave Plus Wall Dimmer"
-	fingerprint mfr:"0063", prod:"4944", model:"3038", ver: "5.29", deviceJoinName: "GE Z-Wave Plus Wall Dimmer"
+		fingerprint mfr:"0063", prod:"4944", model:"3038", ver: "5.27", deviceJoinName: "GE Z-Wave Plus Wall Dimmer"
+		fingerprint mfr:"0063", prod:"4944", model:"3038", ver: "5.28", deviceJoinName: "GE Z-Wave Plus Wall Dimmer"
+		fingerprint mfr:"0063", prod:"4944", model:"3038", ver: "5.29", deviceJoinName: "GE Z-Wave Plus Wall Dimmer"
         fingerprint mfr:"0063", prod:"4944", model:"3039", ver: "5.19", deviceJoinName: "GE Z-Wave Plus 1000W Wall Dimmer"
         fingerprint mfr:"0063", prod:"4944", model:"3130", ver: "5.21", deviceJoinName: "GE Z-Wave Plus Toggle Dimmer"
         fingerprint mfr:"0063", prod:"4944", model:"3135", ver: "5.26", deviceJoinName: "Jasco Z-Wave Plus Wall Dimmer"
@@ -139,6 +142,7 @@ metadata {
 			tileAttribute ("device.level", key: "SLIDER_CONTROL") {
 				attributeState "level", action:"switch level.setLevel"
 			}
+	        tileAttribute ("device.about", key: "SECONDARY_CONTROL") { attributeState "aboutTxt", label:'${currentValue}' }
 		}
         
         standardTile("doubleUp", "device.button", width: 3, height: 2, decoration: "flat") {
@@ -205,18 +209,27 @@ metadata {
         controlTile("allDelay", "device.allDelay", "slider", width: 4, height: 1, range:"(1..255)", inactiveLabel: false) {
 			state "default", action:"setAllDelay"
 		}
-
+     
+ 		standardTile("defaultLevelLabel", "device.defaultLevel",  width: 2, height: 1, inactiveLabel: false) {
+        	state "default", label:'Default Level: ${currentValue}%'
+        }
+        controlTile("defaultLevel", "device.defaultLevel", "slider", width: 4, height: 1, range:"(0..99)", inactiveLabel: false) {
+			state "default", action:"setDefaultLevel"
+		}
+        
 		main "switch"
         details(["switch", "doubleUp", "doubleDown",
         		 "indicator", "inverted", "refresh",
                  "zwaveStepsLabel", "zwaveSteps", "zwaveDelayLabel", "zwaveDelay",
                  "manualStepsLabel", "manualSteps", "manualDelayLabel", "manualDelay",
-                 "allStepsLabel", "allSteps", "allDelayLabel", "allDelay"])
+                 "allStepsLabel", "allSteps", "allDelayLabel", "allDelay",
+                 "defaultLevelLabel", "defaultLevel"])
 	}
 }
 
 // parse events into attributes
 def parse(String description) {
+	log.debug "parse() defaultLevel: ${device.currentValue('defaultLevel')} // switch: ${device.currentValue('switch')}"     
     log.debug "description: $description"
     def result = null
     def cmd = zwave.parse(description, [0x20: 1, 0x25: 1, 0x26: 3, 0x56: 1, 0x70: 2, 0x72: 2, 0x85: 2])
@@ -241,14 +254,36 @@ def zwaveEvent(physicalgraph.zwave.commands.crc16encapv1.Crc16Encap cmd) {
 }
 
 def zwaveEvent(physicalgraph.zwave.commands.basicv1.BasicReport cmd) {
-	dimmerEvents(cmd)
+	log.debug "BasicReport: ${cmd}"
+    
+	if (device.currentValue('defaultLevel') > 0 && device.currentValue("switch") == "off" && cmd.value > 0 && cmd.value != device.currentValue('defaultLevel')) {
+		log.debug "BasicReport // LEVEL: ${device.currentValue('level')} differs from DEFLEVEL: ${device.currentValue('defaultLevel')}"
+        sendEvent(name: "level", value: device.currentValue('defaultLevel'), unit: "%")
+        cmd.value = device.currentValue('defaultLevel')
+  		log.debug "BasicReport CHECK LEVEL ${device.currentValue('level')}"
+  		log.debug "BasicReport CHECK VALUE ${cmd.value}"
+	}
+    
+    dimmerEvents(cmd)
 }
 
 def zwaveEvent(physicalgraph.zwave.commands.switchmultilevelv3.SwitchMultilevelReport cmd) {
+		log.debug "SwitchMultilevelReport: ${cmd}"
+        
+	if (device.currentValue('defaultLevel') > 0 && device.currentValue("switch") == "off" && cmd.value > 0 && cmd.value != device.currentValue('defaultLevel')) {
+//		log.debug "SwitchMultilevelReport ATTEMPT RESET LEVEL ${device.currentValue('level')} TO DEFLEVEL: ${device.currentValue('defaultLevel')}"
+//        sendEvent(name: "level", value: device.currentValue('defaultLevel'), unit: "%")
+//        cmd.value = device.currentValue('defaultLevel')
+//  		log.debug "SwitchMultilevelReport CHECK LEVEL ${device.currentValue('level')}"
+//  		log.debug "SwitchMultilevelReport CHECK VALUE ${cmd.value}"
+		log.debug "SwitchMultilevelReport // LEVEL: ${device.currentValue('level')} differs from DEFLEVEL: ${device.currentValue('defaultLevel')}"
+	}
+    
 	dimmerEvents(cmd)
 }
 
 def zwaveEvent(physicalgraph.zwave.commands.switchmultilevelv3.SwitchMultilevelSet cmd) {
+		log.debug "SwitchMultilevelSet: ${cmd}"
 	dimmerEvents(cmd)
 }
 
@@ -324,6 +359,10 @@ def zwaveEvent(physicalgraph.zwave.commands.configurationv2.ConfigurationReport 
             name = "allDelay"
             value = reportValue
             break
+        case 32:
+            name = "defaultLevel"
+            value = reportValue
+            break
         default:
             break
     }
@@ -365,6 +404,7 @@ def configure() {
     cmds << zwave.configurationV2.configurationGet(parameterNumber: 10).format()
     cmds << zwave.configurationV2.configurationGet(parameterNumber: 11).format()
     cmds << zwave.configurationV2.configurationGet(parameterNumber: 12).format()
+    cmds << zwave.configurationV2.configurationGet(parameterNumber: 32).format()
     
     // Add the hub to association group 3 to get double-tap notifications
     cmds << zwave.associationV2.associationSet(groupingIdentifier: 3, nodeId: zwaveHubNodeId).format()
@@ -396,6 +436,7 @@ def updated() {
     }
 
 	sendHubCommand(cmds.collect{ new physicalgraph.device.HubAction(it.format()) }, 500)
+	showVersion()
 }
 
 def indicatorWhenOn() {
@@ -467,6 +508,13 @@ def setAllDelay(delay) {
 	zwave.configurationV2.configurationSet(scaledConfigurationValue: delay, parameterNumber: 12, size: 2).format()
 }
 
+def setDefaultLevel(level) {
+	log.debug "setDefaultLevel >> value: $level"
+    level = Math.max(Math.min(level, 99), 1)
+	sendEvent(name: "defaultLevel", value: level, displayed: false)
+	zwave.configurationV2.configurationSet(scaledConfigurationValue: level, parameterNumber: 32, size: 1).format()
+}
+
 def poll() {
 	def cmds = []
     cmds << zwave.switchMultilevelV2.switchMultilevelGet().format()
@@ -491,26 +539,43 @@ def refresh() {
     cmds << zwave.configurationV2.configurationGet(parameterNumber: 10).format()
     cmds << zwave.configurationV2.configurationGet(parameterNumber: 11).format()
     cmds << zwave.configurationV2.configurationGet(parameterNumber: 12).format()
+	cmds << zwave.configurationV2.configurationGet(parameterNumber: 32).format()
     cmds << zwave.associationV2.associationGet(groupingIdentifier: 3).format()
 	if (getDataValue("MSR") == null) {
 		cmds << zwave.manufacturerSpecificV1.manufacturerSpecificGet().format()
 	}
 	delayBetween(cmds,500)
+    showVersion()
 }
 
 def on() {
 	def cmds = []
-    cmds << zwave.basicV1.basicSet(value: 0xFF).format()
-   	cmds << zwave.switchMultilevelV2.switchMultilevelGet().format()
     def delay = (device.currentValue("zwaveSteps") * device.currentValue("zwaveDelay")).longValue() + 1000
+    if (device.currentValue('defaultLevel') > 0) {  // if we have a defaultLevel set, use it. 
+    	// using switchMultiLevelSet instead of basicSet so that we have predictable and programmable ramp-up.
+		cmds << zwave.switchMultilevelV2.switchMultilevelSet(value: device.currentValue('defaultLevel'), dimmingDuration: delay/1000).format()
+//    	cmds << zwave.basicV1.basicSet(value: device.currentValue('defaultLevel')).format()
+    } else {
+    	cmds << zwave.basicV1.basicSet(value: 0xFF).format()  // 0xFF = 255 
+    }
+   	cmds << zwave.switchMultilevelV1.switchMultilevelGet().format() // using V1, determine why.
+    //cmds << zwave.switchMultilevelV2.switchMultilevelGet().format()
+    log.debug "on()"
+
+    zwave.basicV1.basicSet(value: 1).format() // This particular dimmer always turns on when a value > 0 is sent, so turn it on initially with a value of 1.
     delayBetween(cmds, delay)
+//    zwave.basicV1.basicSet(value: 255).format()
 }
 
 def off() {
 	def cmds = []
     cmds << zwave.basicV1.basicSet(value: 0x00).format()
    	cmds << zwave.switchMultilevelV2.switchMultilevelGet().format()
-    def delay = (device.currentValue("zwaveSteps") * device.currentValue("zwaveDelay")).longValue() + 1000
+    log.debug "off()"
+    // when used in off(), delay is how long to wait after issuing the zwave off command before checking status.
+    // if the combined value is too low, you'll see ST app showing 'off' then back 'on' after turning the switch off.
+    def delay = (device.currentValue("zwaveSteps") * device.currentValue("zwaveDelay")).longValue() + 1000 // in milliseconds, add 1 second.
+    log.debug "delay: $delay"
     delayBetween(cmds, delay)
 }
 
@@ -560,6 +625,9 @@ def levelDown() {
 	    setLevel(nextLevel)
     }
 }
+
+def showVersion() { 
+    sendEvent (name: "about", value:"DTH Version 1.0.11 (11/5/19)") }
 
 // Private Methods
 
