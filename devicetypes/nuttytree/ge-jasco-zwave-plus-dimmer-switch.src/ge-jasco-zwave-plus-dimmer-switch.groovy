@@ -639,7 +639,7 @@ def levelDown() {
 }
 
 def showVersion() { 
-	sendEvent (name: "about", value:"DTH Version .18 (11/6/19)")
+	sendEvent (name: "about", value:"DTH Version .19 (11/6/19)")
 }
 
 // Private Methods
