@@ -102,6 +102,9 @@ simulator {
 }
     
 preferences {
+        //param 6
+        input "dimrate", "bool", title: "Enable Slow Dim Rate (Off=Quick)", defaultValue:false
+	
 	input (
 		type: "paragraph",
 		element: "paragraph",
@@ -333,6 +336,10 @@ def zwaveEvent(physicalgraph.zwave.commands.configurationv2.ConfigurationReport 
 			name = "inverted"
 			value = reportValue == 1 ? "true" : "false"
 			break
+		case 6:
+			name = "dimRate"
+			value = reportValue == 1 ? "slow" : "fast"
+			break   
 		case 7:
 			name = "zwaveSteps"
 			value = reportValue
@@ -396,6 +403,7 @@ def configure() {
 	// Get current config parameter values
 	cmds << zwave.configurationV2.configurationGet(parameterNumber: 3).format()
 	cmds << zwave.configurationV2.configurationGet(parameterNumber: 4).format()
+	cmds << zwave.configurationV2.configurationGet(parameterNumber: 6).format()
 	cmds << zwave.configurationV2.configurationGet(parameterNumber: 7).format()
 	cmds << zwave.configurationV2.configurationGet(parameterNumber: 8).format()
 	cmds << zwave.configurationV2.configurationGet(parameterNumber: 9).format()
@@ -417,6 +425,10 @@ def updated() {
 	def nodes = []
 	def cmds = []
 
+	//dim rate param 6
+	cmds << zwave.configurationV1.configurationSet(configurationValue: [dimrate ? 1 : 0], parameterNumber: 6, size: 1)
+	cmds << zwave.configurationV1.configurationGet(parameterNumber: 6)
+	
 	if (settings.requestedGroup2 != state.currentGroup2) {
 		nodes = parseAssocGroupList(settings.requestedGroup2, 2)
 		cmds << zwave.associationV2.associationRemove(groupingIdentifier: 2, nodeId: [])
@@ -531,6 +543,7 @@ def refresh() {
 	cmds << zwave.switchMultilevelV2.switchMultilevelGet().format()
 	cmds << zwave.configurationV2.configurationGet(parameterNumber: 3).format()
 	cmds << zwave.configurationV2.configurationGet(parameterNumber: 4).format()
+	cmds << zwave.configurationV2.configurationGet(parameterNumber: 6).format()
 	cmds << zwave.configurationV2.configurationGet(parameterNumber: 7).format()
 	cmds << zwave.configurationV2.configurationGet(parameterNumber: 8).format()
 	cmds << zwave.configurationV2.configurationGet(parameterNumber: 9).format()
