@@ -574,7 +574,7 @@ def on() {
 	log.debug "on()"
 
 	zwave.basicV1.basicSet(value: 1).format() // This particular dimmer always turns on when a value > 0 is sent, so turn it on initially with a value of 1.
-	delayBetween(cmds, delay)
+	delayBetween(cmds, 5000) //delay)
 //	zwave.basicV1.basicSet(value: 255).format()
 }
 
@@ -587,7 +587,7 @@ def off() {
 //	if the combined value is too low, you'll see ST app showing 'off' then back 'on' after turning the switch off.
 	def delay = (device.currentValue("zwaveSteps") * device.currentValue("zwaveDelay")).longValue() + 1000 // in milliseconds, add 1 second.
 	log.debug "delay: $delay"
-	delayBetween(cmds, delay)
+	delayBetween(cmds, 5000) //delay)
 }
 
 def setLevel(value) {
